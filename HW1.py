@@ -1,5 +1,6 @@
 import io
 import json
+import pickle
 import pandas as pd
 import numpy as np
 from datetime import timedelta, datetime
@@ -16,25 +17,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.tree import DecisionTreeRegressor
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, median_absolute_error, r2_score
 
-
-from airflow.models import DAG, Variable
-from airflow.operators.python import PythonOperator
-from datetime import timedelta, datetime
-from sklearn.datasets import fetch_california_housing
-from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score, mean_squared_error, median_absolute_error
-from typing import Any, Dict, Literal
-from airflow.hooks.S3_hook import S3Hook
-import pandas as pd
-import pickle
-import io
-import json
 
 # Переменная для хранения бакета на S3
 BUCKET = Variable.get("S3_BUCKET")
@@ -149,7 +134,6 @@ def create_dag(dag_id: str, m_name: Literal["random_forest", "linear_regression"
             "features": list(X.columns)
         }
 
-
     # Шаг 4: обучение модели
     def train_model(m_name: str, **kwargs) -> Dict[str, Any]:
         start_ts = datetime.now()
@@ -181,23 +165,13 @@ def create_dag(dag_id: str, m_name: Literal["random_forest", "linear_regression"
             "mae": median_absolute_error(data["y_test"], prediction)
         }
     
-        # Сохраняем предсказания модели на S3 через boto3
-        filebuffer = io.BytesIO()
-        pickle.dump(prediction, filebuffer)
-        filebuffer.seek(0)
-        s3_client.upload_fileobj(
-            Fileobj=filebuffer,
-            Bucket=BUCKET,
-            Key=f"MaximGrinin/{m_name}/results/predictions.pkl"
-        )
-    
         end_ts = datetime.now()
+        
         return {
             "train_model_start_ts": start_ts.strftime('%Y-%m-%d %H:%M:%S'),
             "train_model_end_ts": end_ts.strftime('%Y-%m-%d %H:%M:%S'),
             "metrics": metrics
         }
-
 
     # Шаг 5: сохранение результатов
     def save_results(m_name: str, **kwargs) -> None:
@@ -229,7 +203,6 @@ def create_dag(dag_id: str, m_name: Literal["random_forest", "linear_regression"
             Bucket=BUCKET,
             Key=f"MaximGrinin/{m_name}/results/final_metrics.json"
         )
-
 
     dag = DAG(
         dag_id=dag_id,
